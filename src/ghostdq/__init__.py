@@ -13,8 +13,8 @@ Quick start
 >>> client = GhostDQClient(api_key="ghd_...")
 >>> result = client.create_run(dataset_id="<uuid>", metrics=metrics)
 
-Or from the terminal:
-    ghostdq run --dataset-id <uuid> --file data.csv --api-key ghd_...
+Or from the terminal (local — no API key):
+    ghostdq run --contract contract.yaml --file data.csv
 """
 
 from ghostdq.client import (

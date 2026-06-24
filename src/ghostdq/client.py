@@ -48,22 +48,33 @@ class GhostDQClient:
 
     def create_run(
         self,
-        dataset_id: str | uuid.UUID,
-        metrics: dict[str, Any],
+        dataset_id: str | uuid.UUID | None = None,
+        metrics: dict[str, Any] | None = None,
         source: str = "sdk",
+        *,
+        dataset: str | None = None,
     ) -> RunResult:
         """POST /v1/runs — submit computed metrics.
 
+        Provide ``dataset_id`` (UUID from the dashboard) or ``dataset`` (name from
+        the contract YAML) — exactly one is required.
+
         Raises:
+            ValueError: if neither or both identifiers are given.
             GhostDQAPIError: on any non-2xx response.
         """
-        body = json.dumps(
-            {
-                "dataset_id": str(dataset_id),
-                "metrics": metrics,
-                "source": source,
-            }
-        ).encode()
+        if metrics is None:
+            raise TypeError("create_run() missing required argument: 'metrics'")
+        if (dataset_id is None) == (dataset is None):
+            raise ValueError("exactly one of dataset_id or dataset must be provided")
+
+        payload: dict[str, Any] = {"metrics": metrics, "source": source}
+        if dataset_id is not None:
+            payload["dataset_id"] = str(dataset_id)
+        else:
+            payload["dataset"] = dataset
+
+        body = json.dumps(payload).encode()
 
         data = self._post("/v1/runs", body)
         return RunResult(run_id=data["run_id"], status=data["status"])
