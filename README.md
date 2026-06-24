@@ -112,12 +112,6 @@ mypy src tests --ignore-missing-imports
 
 ---
 
-## Publishing to PyPI
-
-See [PUBLISHING.md](./PUBLISHING.md) for build, TestPyPI, and production upload steps. Releases are automated via [GitHub Actions](.github/workflows/publish-pypi.yml) when you publish a GitHub Release.
-
----
-
 ## License & disclaimer
 
 Licensed under [Apache License 2.0](LICENSE).
