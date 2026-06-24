@@ -1,0 +1,77 @@
+PACKAGE: packages/sdk  (public PyPI package: ghostdq)
+======================================================
+
+PURPOSE
+-------
+The public, lightweight data-quality SDK. Installed by end-users via `pip install ghostdq`.
+It computes metrics locally from a file and ships only the aggregated numbers to the
+GhostDQ Ingest API. Raw data never leaves the user's machine.
+
+CRITICAL DEPENDENCY RULE
+------------------------
+This package MUST NOT import from ghostdq_core. ghostdq_core pulls in SQLAlchemy,
+boto3, psycopg, etc. — heavyweight infrastructure that has no place in a public SDK.
+If you need a type or helper that exists in ghostdq_core, DUPLICATE it here.
+The contract types in `ghostdq.contract` are a deliberate duplicate of the logic
+in `ghostdq_core.contract` for this reason.
+
+MODULE LAYOUT
+-------------
+src/ghostdq/
+  __init__.py     — public API surface, re-exports everything a user needs
+  contract.py     — Contract / RuleSpec dataclasses + parse_contract(yaml_text)
+  io_pandas.py    — read_file() dispatcher, read_csv/parquet/avro helpers
+  metrics.py      — compute_metrics(df, rules) → dict[str, Any]
+  client.py       — GhostDQClient: POST /v1/runs, GET /v1/datasets/{id}/contract
+  cli.py          — `ghostdq run ...` CLI entry point (stdlib argparse + urllib)
+  py.typed        — mypy marker
+
+tests/
+  conftest.py         — shared fixtures (simple_df, contract_yaml_minimal/full)
+  test_contract.py    — parse_contract + metric_keys derivation
+  test_metrics.py     — compute_metrics for all 5 rule types
+  test_io_pandas.py   — read_file for CSV + Parquet (Avro needs fastavro)
+  test_client.py      — GhostDQClient with mocked urlopen (no network)
+  test_cli.py         — `ghostdq run` with mocked GhostDQClient
+
+METRIC KEY CONTRACT (must match ghostdq_core.rules)
+----------------------------------------------------
+  row_count           → int (total rows)
+  null_rate:{col}     → float [0.0, 1.0]  (fraction of null values)
+  duplicate_count:{col} → int  (rows whose value appears > 1 time, ALL occurrences)
+  value_min:{col}     → float
+  value_max:{col}     → float
+  disallowed_count:{col} → int (rows whose value is not in the `values` list)
+
+DESIGN DECISIONS
+----------------
+- CLI uses stdlib `argparse` + `urllib` (no click, no httpx) to keep deps minimal.
+- Lazy imports inside _cmd_run keep `ghostdq --help` fast.
+- compute_metrics deduplicates: if two rules share a metric key, it's computed once.
+- _duplicate_count uses duplicated(keep=False) — counts ALL rows in a duplicate group,
+  not just the "extra" ones. This matches the fail condition in ghostdq_core.rules.
+- _disallowed_count casts both the column and the allowed list to str before comparing,
+  consistent with how YAML parses contract values.
+- GhostDQAPIError carries .status_code for programmatic handling by callers.
+
+TESTING
+-------
+  cd <repo-root>
+  pytest packages/sdk/tests -v
+
+All 32 tests are pure unit tests — no network, no DB, no filesystem side effects
+beyond pytest's tmp_path. The CLI patch target is `ghostdq.client.GhostDQClient`
+(not `ghostdq.cli.GhostDQClient`) because the CLI uses lazy imports.
+
+VERSIONS
+--------
+  ghostdq 0.1.0  (M3 — first real release, goes to TestPyPI then PyPI)
+  Python ≥ 3.10
+  pandas ≥ 2.0, pyarrow ≥ 15, fastavro ≥ 1.9, pyyaml ≥ 6.0
+
+NEXT STEPS (post-M3)
+--------------------
+- Publish to TestPyPI: `hatch build && twine upload --repository testpypi dist/*`
+- Add `ghostdq check` subcommand for offline local-only validation (no API call)
+- Spark metrics module (packages/sdk/src/ghostdq/metrics_spark.py)
+- SQL metrics module for warehouse use cases

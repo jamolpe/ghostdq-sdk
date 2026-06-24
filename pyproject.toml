@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ghostdq"
+version = "0.1.0"
+description = "GhostDQ SDK: compute data-quality metrics locally and ship them to GhostDQ."
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+keywords = ["data-quality", "data-validation", "dq", "metrics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+# Core runtime deps — deliberately minimal.
+# httpx / requests deliberately omitted: client uses stdlib urllib only.
+# click / typer deliberately omitted: CLI uses stdlib argparse only.
+dependencies = [
+    "pandas>=2.0,<3.0",
+    "pyarrow>=15.0,<19.0",
+    "fastavro>=1.9,<2.0",
+    "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0,<9.0",
+    "pytest-cov>=5.0,<6.0",
+    "ruff>=0.5,<1.0",
+    "mypy>=1.10,<2.0",
+    "pandas-stubs>=2.0,<3.0",
+    "types-PyYAML>=6.0,<7.0",
+]
+
+[project.scripts]
+ghostdq = "ghostdq.cli:main"
+
+[project.urls]
+Homepage = "https://ghostdq.io"
+Repository = "https://github.com/jamolpe/ghostdq"
+"Bug Tracker" = "https://github.com/jamolpe/ghostdq/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ghostdq"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/ghostdq/py.typed" = "ghostdq/py.typed"
