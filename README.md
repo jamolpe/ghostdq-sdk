@@ -99,13 +99,27 @@ ghostdq run --dataset-id <uuid> --file sales.csv
 
 ## Local development
 
+Requires Python **3.10+** (3.13 recommended). From the repo root:
+
 ```bash
-pip install -e "packages/sdk[dev]"
-pytest packages/sdk/tests
-ruff check packages/sdk/src packages/sdk/tests
-mypy packages/sdk/src packages/sdk/tests --ignore-missing-imports
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest tests
+ruff check src tests
+mypy src tests --ignore-missing-imports
 ```
+
+---
 
 ## Publishing to PyPI
 
-See [PUBLISHING.md](./PUBLISHING.md) for build, TestPyPI, and production upload steps.
+See [PUBLISHING.md](./PUBLISHING.md) for build, TestPyPI, and production upload steps. Releases are automated via [GitHub Actions](.github/workflows/publish-pypi.yml) when you publish a GitHub Release.
+
+---
+
+## License & disclaimer
+
+Licensed under [Apache License 2.0](LICENSE).
+
+This software is provided **“as is”**, without warranty of any kind. You are responsible for evaluating whether it fits your use case and for any outcomes from using it. See the [LICENSE](LICENSE) for the full terms, including limitations of liability.
