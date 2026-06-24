@@ -68,9 +68,54 @@ def test_run_with_local_contract(contract_file: Path, data_file: Path) -> None:
     instance.create_run.assert_called_once()
     call_kwargs = instance.create_run.call_args[1]
     assert "row_count" in call_kwargs["metrics"]
+    assert "dataset_id" in call_kwargs
 
 
-def test_run_missing_api_key(data_file: Path, contract_file: Path) -> None:
+def test_run_with_contract_only(contract_file: Path, data_file: Path) -> None:
+    with patch("ghostdq.client.GhostDQClient") as MockClient:
+        exit_code = main(
+            [
+                "run",
+                "--file", str(data_file),
+                "--contract", str(contract_file),
+            ]
+        )
+
+    assert exit_code == 0
+    MockClient.assert_not_called()
+
+
+def test_run_local_fails_on_rule_violation(contract_file: Path, tmp_path: Path) -> None:
+    bad_csv = tmp_path / "empty.csv"
+    bad_csv.write_text("id\n")
+
+    contract = tmp_path / "contract.yaml"
+    contract.write_text(
+        textwrap.dedent(
+            """\
+            dataset: sales
+            version: 1
+            rules:
+              - row_count: {min: 10}
+            """
+        )
+    )
+
+    exit_code = main(["run", "--file", str(bad_csv), "--contract", str(contract)])
+    assert exit_code == 1
+
+
+def test_run_missing_contract_and_dataset_id(data_file: Path) -> None:
+    exit_code = main(
+        [
+            "run",
+            "--file", str(data_file),
+        ]
+    )
+    assert exit_code == 1
+
+
+def test_run_missing_api_key_for_remote(data_file: Path, contract_file: Path) -> None:
     exit_code = main(
         [
             "run",

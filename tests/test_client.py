@@ -51,6 +51,37 @@ def test_create_run_api_error() -> None:
     assert exc_info.value.status_code == 401
 
 
+def test_create_run_with_dataset_name() -> None:
+    run_id = str(uuid.uuid4())
+    client = _make_client()
+    captured: dict[str, Any] = {}
+
+    def fake_urlopen(req: Any, timeout: int = 30) -> MagicMock:
+        captured["body"] = json.loads(req.data.decode())
+        return _mock_urlopen({"run_id": run_id, "status": "pending"})
+
+    with patch("ghostdq.client.urlopen", side_effect=fake_urlopen):
+        result = client.create_run(metrics={"row_count": 100}, dataset="sales")
+
+    assert isinstance(result, RunResult)
+    assert result.run_id == run_id
+    assert captured["body"] == {
+        "dataset": "sales",
+        "metrics": {"row_count": 100},
+        "source": "sdk",
+    }
+
+
+def test_create_run_requires_exactly_one_identifier() -> None:
+    client = _make_client()
+
+    with pytest.raises(ValueError, match="exactly one"):
+        client.create_run(metrics={})
+
+    with pytest.raises(ValueError, match="exactly one"):
+        client.create_run(dataset_id=uuid.uuid4(), metrics={}, dataset="sales")
+
+
 def test_get_contract_yaml_success() -> None:
     dataset_id = str(uuid.uuid4())
     yaml_text = "dataset: sales\nversion: 1\nrules: []\n"
