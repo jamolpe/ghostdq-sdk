@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import textwrap
-
-import pytest
 from ghostdq.contract import parse_contract
 from ghostdq.evaluate import evaluate_rules, format_evaluation_line
 from ghostdq.metrics import compute_metrics
