@@ -1,0 +1,83 @@
+name: Publish beta to PyPI
+
+on:
+  push:
+    branches:
+      - development
+
+concurrency:
+  group: publish-beta-pypi
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish-beta:
+    runs-on: ubuntu-latest
+    environment: pypi-beta
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Compute next beta version
+        id: version
+        run: |
+          set -euo pipefail
+
+          base_version=$(grep -E '^version = ' pyproject.toml | sed -E 's/^version = "(.*)"/\1/')
+          # Strip any existing pre-release suffix from pyproject (e.g. 0.1.4b2 -> 0.1.4)
+          base_version=$(echo "$base_version" | sed -E 's/b[0-9]+$//')
+
+          latest_tag=$(git tag -l "v${base_version}b*" --sort=-v:refname | head -n 1 || true)
+          if [ -z "$latest_tag" ]; then
+            beta_num=1
+          else
+            beta_num=$(echo "$latest_tag" | sed -E "s/^v${base_version}b//")
+            beta_num=$((beta_num + 1))
+          fi
+
+          version="${base_version}b${beta_num}"
+          tag="v${version}"
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Next beta version: $version (tag: $tag)"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]" build twine
+
+      - name: Run tests
+        run: pytest tests
+
+      - name: Lint
+        run: ruff check src tests
+
+      - name: Set beta version for build
+        run: |
+          sed -i 's/^version = .*/version = "${{ steps.version.outputs.version }}"/' pyproject.toml
+          grep '^version = ' pyproject.toml
+
+      - name: Build package
+        run: python -m build
+
+      - name: Validate distribution
+        run: twine check dist/*
+
+      - name: Upload beta to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+
+      - name: Create and push git tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Beta release ${{ steps.version.outputs.version }}"
+          git push origin "${{ steps.version.outputs.tag }}"
