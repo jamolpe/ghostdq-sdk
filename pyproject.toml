@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ghostdq"
-version = "0.1.0"
+version = "0.1.1"
 description = "GhostDQ SDK: compute data-quality metrics locally and ship them to GhostDQ."
 requires-python = ">=3.10"
 readme = "README.md"
