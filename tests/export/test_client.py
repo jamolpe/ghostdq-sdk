@@ -1,4 +1,4 @@
-"""Tests for ghostdq.client — HTTP client (no real network)."""
+"""Tests for ghostdq.export — HTTP client (no real network)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
-from ghostdq.client import GhostDQAPIError, GhostDQClient, RunResult
+from ghostdq.export import GhostDQAPIError, GhostDQClient, RunResult
 
 
 def _make_client() -> GhostDQClient:
@@ -29,7 +29,7 @@ def test_create_run_success() -> None:
     run_id = str(uuid.uuid4())
     client = _make_client()
 
-    with patch("ghostdq.client.urlopen", return_value=_mock_urlopen({"run_id": run_id, "status": "pending"})):
+    with patch("ghostdq.export.client.urlopen", return_value=_mock_urlopen({"run_id": run_id, "status": "pending"})):
         result = client.create_run(dataset_id=uuid.uuid4(), metrics={"row_count": 100})
 
     assert isinstance(result, RunResult)
@@ -45,7 +45,7 @@ def test_create_run_api_error() -> None:
     fp.read.return_value = b'{"detail":"invalid key"}'
     err = HTTPError(url="http://x", code=401, msg="Unauthorized", hdrs=MagicMock(), fp=fp)
 
-    with patch("ghostdq.client.urlopen", side_effect=err), pytest.raises(GhostDQAPIError) as exc_info:
+    with patch("ghostdq.export.client.urlopen", side_effect=err), pytest.raises(GhostDQAPIError) as exc_info:
         client.create_run(dataset_id=uuid.uuid4(), metrics={})
 
     assert exc_info.value.status_code == 401
@@ -60,7 +60,7 @@ def test_create_run_with_dataset_name() -> None:
         captured["body"] = json.loads(req.data.decode())
         return _mock_urlopen({"run_id": run_id, "status": "pending"})
 
-    with patch("ghostdq.client.urlopen", side_effect=fake_urlopen):
+    with patch("ghostdq.export.client.urlopen", side_effect=fake_urlopen):
         result = client.create_run(metrics={"row_count": 100}, dataset="sales")
 
     assert isinstance(result, RunResult)
@@ -88,7 +88,7 @@ def test_get_contract_yaml_success() -> None:
     client = _make_client()
 
     with patch(
-        "ghostdq.client.urlopen",
+        "ghostdq.export.client.urlopen",
         return_value=_mock_urlopen(
             {"dataset_id": dataset_id, "version": 1, "yaml_text": yaml_text, "rules_json": {}}
         ),

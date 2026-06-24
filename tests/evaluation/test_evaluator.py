@@ -1,9 +1,9 @@
-"""Tests for ghostdq.evaluate — local rule evaluation."""
+"""Tests for ghostdq.evaluation — local rule evaluation."""
 
 from __future__ import annotations
 
 from ghostdq.contract import parse_contract
-from ghostdq.evaluate import evaluate_rules, format_evaluation_line
+from ghostdq.evaluation import RuleEvaluation, evaluate_rules, format_evaluation_line
 from ghostdq.metrics import compute_metrics
 
 
@@ -56,8 +56,6 @@ def test_unique_fail() -> None:
 
 
 def test_format_line() -> None:
-    from ghostdq.evaluate import RuleEvaluation
-
     line = format_evaluation_line(
         RuleEvaluation(
             rule_type="null_rate",
