@@ -83,17 +83,32 @@ def test_run_missing_api_key(data_file: Path, contract_file: Path) -> None:
     assert exit_code == 1
 
 
-def test_run_missing_ingest_url(data_file: Path, contract_file: Path) -> None:
-    exit_code = main(
-        [
-            "run",
-            "--dataset-id", str(uuid.uuid4()),
-            "--file", str(data_file),
-            "--contract", str(contract_file),
-            "--api-key", "ghd_test",
-        ]
+def test_run_default_ingest_url(data_file: Path, contract_file: Path) -> None:
+    from ghostdq.client import DEFAULT_INGEST_URL
+
+    mock_result = MagicMock()
+    mock_result.run_id = str(uuid.uuid4())
+    mock_result.status = "pending"
+
+    with patch("ghostdq.client.GhostDQClient") as MockClient:
+        instance = MockClient.return_value
+        instance.create_run.return_value = mock_result
+
+        exit_code = main(
+            [
+                "run",
+                "--dataset-id", str(uuid.uuid4()),
+                "--file", str(data_file),
+                "--contract", str(contract_file),
+                "--api-key", "ghd_test",
+            ]
+        )
+
+    assert exit_code == 0
+    MockClient.assert_called_once_with(
+        api_key="ghd_test",
+        ingest_url=DEFAULT_INGEST_URL,
     )
-    assert exit_code == 1
 
 
 def test_run_file_not_found(tmp_path: Path, contract_file: Path) -> None:

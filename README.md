@@ -37,10 +37,7 @@ metrics = compute_metrics(df, contract.rules)
 # → {"row_count": 120000, "null_rate:country": 0.02, ...}
 
 # 4. Ship the metrics to GhostDQ
-client = GhostDQClient(
-    api_key="ghd_your_key",
-    ingest_url="https://ingest.ghostdq.io",
-)
+client = GhostDQClient(api_key="ghd_your_key")
 result = client.create_run(dataset_id="<dataset-uuid>", metrics=metrics)
 print(result.run_id, result.status)  # ⇒ <uuid>  pending
 ```
@@ -55,23 +52,22 @@ ghostdq run \
   --dataset-id <uuid> \
   --file sales.csv \
   --contract contract.yaml \
-  --api-key ghd_xxx \
-  --ingest-url https://ingest.ghostdq.io
+  --api-key ghd_xxx
 
 # Fetch the contract automatically from the API
 ghostdq run \
   --dataset-id <uuid> \
   --file sales.parquet \
-  --api-key ghd_xxx \
-  --ingest-url https://ingest.ghostdq.io
+  --api-key ghd_xxx
 ```
 
 Environment variable shortcuts:
 ```bash
 export GHOSTDQ_API_KEY=ghd_xxx
-export GHOSTDQ_INGEST_URL=https://ingest.ghostdq.io
 ghostdq run --dataset-id <uuid> --file sales.csv
 ```
+
+The Ingest API defaults to `https://ghostdq.com/ingest`. Override with `--ingest-url` or `GHOSTDQ_INGEST_URL` (e.g. `http://localhost:8000` for local dev).
 
 ---
 

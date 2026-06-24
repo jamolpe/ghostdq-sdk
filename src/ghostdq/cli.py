@@ -3,7 +3,7 @@
 Usage
 -----
 ghostdq run --dataset-id <uuid> --file data.csv \\
-            --api-key ghd_xxx --ingest-url https://ingest.ghostdq.io
+            --api-key ghd_xxx
 
 The command:
   1. Reads the file into a DataFrame.
@@ -14,7 +14,7 @@ The command:
 
 Environment variables (override with flags):
   GHOSTDQ_API_KEY    — API key
-  GHOSTDQ_INGEST_URL — Ingest API base URL
+  GHOSTDQ_INGEST_URL — Ingest API base URL (default: https://ghostdq.com/ingest)
 """
 
 from __future__ import annotations
@@ -54,7 +54,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run_cmd.add_argument(
         "--ingest-url",
         default=None,
-        help="Ingest API base URL (default: $GHOSTDQ_INGEST_URL)",
+        help="Ingest API base URL (default: $GHOSTDQ_INGEST_URL or https://ghostdq.com/ingest)",
     )
 
     return p
@@ -75,7 +75,14 @@ def main(argv: list[str] | None = None) -> int:
 def _cmd_run(args: argparse.Namespace) -> int:
     # Resolve credentials — CLI flags > env vars.
     api_key = args.api_key or os.environ.get("GHOSTDQ_API_KEY", "")
-    ingest_url = args.ingest_url or os.environ.get("GHOSTDQ_INGEST_URL", "")
+    # Lazy imports keep startup fast for `ghostdq --help`.
+    from ghostdq.client import DEFAULT_INGEST_URL, GhostDQAPIError, GhostDQClient
+
+    ingest_url = (
+        args.ingest_url
+        or os.environ.get("GHOSTDQ_INGEST_URL")
+        or DEFAULT_INGEST_URL
+    )
 
     if not api_key:
         print(
@@ -83,15 +90,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
-    if not ingest_url:
-        print(
-            "Error: --ingest-url or $GHOSTDQ_INGEST_URL is required",
-            file=sys.stderr,
-        )
-        return 1
 
-    # Lazy imports keep startup fast for `ghostdq --help`.
-    from ghostdq.client import GhostDQAPIError, GhostDQClient
     from ghostdq.contract import parse_contract
     from ghostdq.io_pandas import read_file
     from ghostdq.metrics import compute_metrics

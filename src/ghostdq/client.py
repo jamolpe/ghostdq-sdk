@@ -14,6 +14,8 @@ from typing import Any
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
+DEFAULT_INGEST_URL = "https://ghostdq.com/ingest"
+
 
 @dataclass
 class RunResult:
@@ -26,12 +28,16 @@ class GhostDQClient:
 
     Args:
         api_key: Secret API key (``ghd_…`` token issued by the control plane).
-        ingest_url: Base URL of the Ingest API, e.g.
-            ``https://ingest.ghostdq.io`` or ``http://localhost:8001``.
+        ingest_url: Base URL of the Ingest API (default: ``https://ghostdq.com/ingest``).
         timeout: Request timeout in seconds (default 30).
     """
 
-    def __init__(self, api_key: str, ingest_url: str, timeout: int = 30) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        ingest_url: str = DEFAULT_INGEST_URL,
+        timeout: int = 30,
+    ) -> None:
         self._api_key = api_key
         self._base = ingest_url.rstrip("/")
         self._timeout = timeout
