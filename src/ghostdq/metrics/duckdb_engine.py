@@ -23,7 +23,12 @@ def _import_duckdb():
 
 
 class DuckDBMetricsEngine:
-    """Compute contract metrics with DuckDB SQL over files or tables."""
+    """Compute contract metrics with DuckDB SQL over files or table expressions.
+
+    Optional dependency — install with ``pip install 'ghostdq[duckdb]'``.
+    Pushes aggregation into SQL (``COUNT``, ``MIN``, ``MAX``, ``GROUP BY``, …)
+    for CSV and Parquet files registered via ``read_csv`` / ``read_parquet``.
+    """
 
     def compute(
         self,
@@ -31,7 +36,13 @@ class DuckDBMetricsEngine:
         source: str,
         rules: list[RuleSpec],
     ) -> dict[str, Any]:
-        """Compute metrics from a DuckDB table expression or view name."""
+        """Compute metrics from a DuckDB table expression or view name.
+
+        Args:
+            connection: An open ``duckdb`` connection.
+            source: SQL table reference, e.g. ``read_parquet('data.parquet')``.
+            rules: Contract rules defining which metrics to compute.
+        """
         need_row_count, plans = build_metric_plan(rules)
         metrics: dict[str, Any] = {}
 
@@ -158,5 +169,48 @@ class DuckDBMetricsEngine:
                 ).fetchone()[0]
             )
             out[f"disallowed_count:{column}"] = bad
+
+        if plan.out_of_range_rate:
+            conditions = ['"{col}" IS NULL', f'TRY_CAST("{col}" AS DOUBLE) IS NULL']
+            if plan.out_of_range_min is not None:
+                conditions.append(
+                    f'TRY_CAST("{col}" AS DOUBLE) < {float(plan.out_of_range_min)}'
+                )
+            if plan.out_of_range_max is not None:
+                conditions.append(
+                    f'TRY_CAST("{col}" AS DOUBLE) > {float(plan.out_of_range_max)}'
+                )
+            predicate = " OR ".join(conditions)
+            bad = int(
+                connection.execute(
+                    f"""
+                    SELECT COALESCE(SUM(CASE WHEN {predicate} THEN 1 ELSE 0 END), 0)::BIGINT
+                    FROM {source}
+                    """
+                ).fetchone()[0]
+            )
+            out[f"out_of_range_rate:{column}"] = (
+                0.0 if total == 0 else round(bad / total, 8)
+            )
+
+        if plan.regex_match_rate and plan.regex_pattern is not None:
+            pattern = str(plan.regex_pattern).replace("'", "''")
+            matches = int(
+                connection.execute(
+                    f"""
+                    SELECT COALESCE(SUM(
+                        CASE
+                            WHEN "{col}" IS NULL THEN 0
+                            WHEN regexp_full_match(CAST("{col}" AS VARCHAR), '{pattern}') THEN 1
+                            ELSE 0
+                        END
+                    ), 0)::BIGINT
+                    FROM {source}
+                    """
+                ).fetchone()[0]
+            )
+            out[f"regex_match_rate:{column}"] = (
+                0.0 if total == 0 else round(matches / total, 8)
+            )
 
         return out

@@ -13,7 +13,16 @@ from ghostdq.evaluation.models import RuleEvaluation
 
 
 class RuleEvaluator:
-    """Check computed metrics against contract rules."""
+    """Check computed metrics against contract rules (no network).
+
+    Mirrors server-side logic in ``ghostdq_core.rules``. Use after
+    :func:`~ghostdq.metrics.compute_metrics` to get pass/fail locally
+    (CLI, tests, CI) before optionally shipping metrics via
+    :class:`~ghostdq.export.GhostDQClient`.
+
+    Each rule produces one :class:`~ghostdq.evaluation.models.RuleEvaluation`
+    in the same order as the contract.
+    """
 
     def evaluate(
         self,
@@ -113,6 +122,34 @@ class RuleEvaluator:
                 passed=passed,
                 value_display="ok" if passed else f"{_format_scalar(bad)} disallowed",
                 constraint_display="",
+                column=column,
+            )
+
+        if rule.rule_type == "out_of_range_rate":
+            value = metrics[f"out_of_range_rate:{col}"]
+            limit = rule.params["max_rate"]
+            parts = []
+            if "min" in rule.params:
+                parts.append(f"min={rule.params['min']}")
+            if "max" in rule.params:
+                parts.append(f"max={rule.params['max']}")
+            parts.append(f"max_rate={limit}")
+            return RuleEvaluation(
+                rule_type="out_of_range_rate",
+                passed=value <= limit,
+                value_display=_format_scalar(value),
+                constraint_display="  ".join(parts),
+                column=column,
+            )
+
+        if rule.rule_type == "regex_match":
+            value = metrics[f"regex_match_rate:{col}"]
+            limit = rule.params.get("min_rate", 1.0)
+            return RuleEvaluation(
+                rule_type="regex_match",
+                passed=value >= limit,
+                value_display=_format_scalar(value),
+                constraint_display=f"min_rate={limit}  pattern={rule.params.get('pattern', '')!r}",
                 column=column,
             )
 

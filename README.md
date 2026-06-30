@@ -215,7 +215,11 @@ rules:
   - duplicate_rate: {column: order_id, max: 0.01}
   - value_range: {column: amount, min: 0, max: 10000}
   - allowed_values: {column: country, values: [ES, US, MX]}
+  - out_of_range_rate: {column: amount, min: 0, max: 10000, max_rate: 0.001}
+  - regex_match: {column: order_id, pattern: '^ORD-[0-9]+$', min_rate: 1.0}
 ```
+
+See also the ready-to-run samples in [`examples/`](examples/).
 
 ### Supported rule types
 
@@ -227,6 +231,29 @@ rules:
 | `duplicate_rate` | `duplicate_rate:{column}` |
 | `value_range` | `value_min:{column}`, `value_max:{column}` |
 | `allowed_values` | `disallowed_count:{column}` |
+| `out_of_range_rate` | `out_of_range_rate:{column}` |
+| `regex_match` | `regex_match_rate:{column}` |
+
+### Rule examples
+
+**`out_of_range_rate`** — row-level bounds (like Great Expectations `expect_column_values_to_be_between`). Fails when more than `max_rate` of rows are null, non-numeric, below `min`, or above `max`:
+
+```yaml
+- out_of_range_rate: {column: amount, min: 0, max: 10000, max_rate: 0}
+```
+
+**`value_range`** — dataset-level bounds. Checks that the column’s observed min/max fall within the limits (a single outlier row does not fail if the aggregate min/max are still in range):
+
+```yaml
+- value_range: {column: amount, min: 0, max: 10000}
+```
+
+**`regex_match`** — whole-string regex match (like `expect_column_values_to_match_regex`). Nulls count as mismatches. Use `[0-9]` in YAML patterns instead of `\d` (backslashes are not escaped in single-quoted YAML):
+
+```yaml
+- regex_match: {column: order_id, pattern: '^ORD-[0-9]+$', min_rate: 1.0}
+- regex_match: {column: email, pattern: '^[^@]+@[^@]+\\.[^@]+$', min_rate: 0.99}
+```
 
 ---
 

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import importlib
+import re
 from collections.abc import Sequence
 from typing import Any
 
 from ghostdq.contract import RuleSpec, required_columns
+from ghostdq.metrics.checks import regex_matches
 from ghostdq.metrics.plans import build_metric_plan
 from ghostdq.reading.types import PathLike
 
@@ -22,9 +24,15 @@ def _import_polars():
 
 
 class PolarsMetricsEngine:
-    """Compute contract metrics from a Polars LazyFrame or DataFrame."""
+    """Compute contract metrics from a Polars LazyFrame or DataFrame.
+
+    Optional dependency — install with ``pip install 'ghostdq[polars]'``.
+    Excels at lazy scans over CSV and Parquet on disk without loading everything
+    into memory first.
+    """
 
     def compute(self, frame: Any, rules: list[RuleSpec]) -> dict[str, Any]:
+        """Collect lazy expressions for *rules* and return metric scalars."""
         pl = _import_polars()
         lazy = frame.lazy() if isinstance(frame, pl.DataFrame) else frame
         needed = required_columns(rules)
@@ -91,6 +99,35 @@ class PolarsMetricsEngine:
                     .alias(f"disallowed_count:{column}")
                 )
 
+            if plan.out_of_range_rate:
+                bounds = []
+                if plan.out_of_range_min is not None:
+                    bounds.append(pl.col(column).cast(pl.Float64, strict=False) < plan.out_of_range_min)
+                if plan.out_of_range_max is not None:
+                    bounds.append(pl.col(column).cast(pl.Float64, strict=False) > plan.out_of_range_max)
+                invalid_numeric = pl.any_horizontal(bounds) if bounds else pl.lit(False)
+                exprs.append(
+                    (
+                        pl.col(column).is_null()
+                        | pl.col(column).cast(pl.Float64, strict=False).is_null()
+                        | invalid_numeric
+                    )
+                    .sum()
+                    .alias(f"_out_of_range_count:{column}")
+                )
+
+            if plan.regex_match_rate and plan.regex_pattern is not None:
+                compiled = re.compile(plan.regex_pattern)
+                exprs.append(
+                    pl.col(column)
+                    .map_elements(
+                        lambda v, pattern=compiled: regex_matches(v, pattern),
+                        return_dtype=pl.Boolean,
+                    )
+                    .sum()
+                    .alias(f"_regex_match_count:{column}")
+                )
+
             if not exprs:
                 continue
 
@@ -100,6 +137,16 @@ class PolarsMetricsEngine:
                     metrics[key] = 0.0 if total == 0 else round(float(value or 0.0), 8)
                 elif key.startswith("value_min:") or key.startswith("value_max:"):
                     metrics[key] = float("nan") if value is None else float(value)
+                elif key.startswith("_out_of_range_count:"):
+                    col_name = key.removeprefix("_out_of_range_count:")
+                    metrics[f"out_of_range_rate:{col_name}"] = (
+                        0.0 if total == 0 else round(int(value or 0) / total, 8)
+                    )
+                elif key.startswith("_regex_match_count:"):
+                    col_name = key.removeprefix("_regex_match_count:")
+                    metrics[f"regex_match_rate:{col_name}"] = (
+                        0.0 if total == 0 else round(int(value or 0) / total, 8)
+                    )
                 else:
                     metrics[key] = int(value or 0)
 

@@ -7,6 +7,15 @@ from pathlib import Path
 
 import pytest
 
+_GHOSTDQ_ENV_KEYS = ("GHOSTDQ_DATASET_ID", "GHOSTDQ_API_KEY", "GHOSTDQ_INGEST_URL")
+
+
+@pytest.fixture(autouse=True)
+def _clear_ghostdq_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """CLI tests must not inherit GHOSTDQ_* vars from the developer shell."""
+    for key in _GHOSTDQ_ENV_KEYS:
+        monkeypatch.delenv(key, raising=False)
+
 CONTRACT_YAML = textwrap.dedent(
     """\
     dataset: sales

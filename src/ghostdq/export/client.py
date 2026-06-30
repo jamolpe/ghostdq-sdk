@@ -18,6 +18,13 @@ from ghostdq.export.exceptions import GhostDQAPIError
 
 @dataclass
 class RunResult:
+    """Response from a successful ``POST /v1/runs`` ingest call.
+
+    Attributes:
+        run_id: UUID of the created run (track status in the control plane).
+        status: Initial run status (typically ``pending``).
+    """
+
     run_id: str
     status: str
 
