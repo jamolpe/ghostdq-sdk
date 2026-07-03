@@ -8,7 +8,12 @@ from ghostdq.contract.models import Contract, RuleSpec, SchemaField, SUPPORTED_R
 
 
 class ContractParser:
-    """Parse GhostDQ contract YAML into :class:`Contract` objects."""
+    """Parse GhostDQ contract YAML into :class:`Contract` objects.
+
+    Validates structure, known rule types, and required top-level fields.
+    Does not evaluate rules — only builds the in-memory representation used
+    by metrics engines and :class:`~ghostdq.evaluation.RuleEvaluator`.
+    """
 
     def parse(self, yaml_text: str) -> Contract:
         """Parse a YAML contract.

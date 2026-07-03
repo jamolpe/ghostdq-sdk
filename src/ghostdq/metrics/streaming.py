@@ -14,7 +14,15 @@ from ghostdq.reading.types import PathLike
 
 
 class StreamingCsvMetricsEngine:
-    """Compute metrics by scanning a CSV in chunks (constant memory)."""
+    """Compute metrics by scanning a CSV file in chunks (constant memory).
+
+    Uses :class:`~ghostdq.metrics.accumulators.StreamingState` instead of loading
+    the full file into pandas. Supports the same metric keys as
+    :class:`MetricsEngine` but only for ``.csv`` files.
+
+    Prefer this backend for large CSV files; use :class:`~ghostdq.metrics.ArrowMetricsEngine`
+    for Parquet.
+    """
 
     def compute(
         self,
@@ -24,6 +32,19 @@ class StreamingCsvMetricsEngine:
         columns: Sequence[str] | None = None,
         chunksize: int = 100_000,
     ) -> dict[str, Any]:
+        """Scan *path* and return aggregated metrics for *rules*.
+
+        Args:
+            path: Path to a UTF-8 CSV file with a header row.
+            rules: Contract rules defining which metrics to compute.
+            columns: Subset of columns to read; defaults to
+                :func:`~ghostdq.contract.required_columns`.
+            chunksize: Number of rows per in-memory batch.
+
+        Raises:
+            FileNotFoundError: If *path* does not exist.
+            ValueError: If the file is not ``.csv`` or a required column is missing.
+        """
         if chunksize < 1:
             raise ValueError("chunksize must be at least 1")
 

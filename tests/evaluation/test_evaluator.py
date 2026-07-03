@@ -77,3 +77,52 @@ def test_full_contract(contract_yaml_full, simple_df) -> None:
     assert len(results) == 5
     assert results[0].rule_type == "row_count" and results[0].passed
     assert results[1].rule_type == "null_rate" and results[1].passed
+
+
+def test_out_of_range_rate_pass() -> None:
+    import pandas as pd
+
+    df = pd.DataFrame({"amount": [10, 20, 30]})
+    results = _eval(
+        "dataset: d\nversion: 1\n"
+        "rules:\n  - out_of_range_rate: {column: amount, min: 0, max: 100, max_rate: 0.1}\n",
+        df,
+    )
+    assert results[0].passed is True
+    assert results[0].rule_type == "out_of_range_rate"
+
+
+def test_out_of_range_rate_fail() -> None:
+    import pandas as pd
+
+    df = pd.DataFrame({"amount": [10, 200, 300]})
+    results = _eval(
+        "dataset: d\nversion: 1\n"
+        "rules:\n  - out_of_range_rate: {column: amount, min: 0, max: 100, max_rate: 0.1}\n",
+        df,
+    )
+    assert results[0].passed is False
+
+
+def test_regex_match_pass() -> None:
+    import pandas as pd
+
+    df = pd.DataFrame({"code": ["AB", "CD"]})
+    results = _eval(
+        "dataset: d\nversion: 1\n"
+        "rules:\n  - regex_match: {column: code, pattern: '^[A-Z]{2}$', min_rate: 1.0}\n",
+        df,
+    )
+    assert results[0].passed is True
+
+
+def test_regex_match_fail() -> None:
+    import pandas as pd
+
+    df = pd.DataFrame({"code": ["AB", "xyz"]})
+    results = _eval(
+        "dataset: d\nversion: 1\n"
+        "rules:\n  - regex_match: {column: code, pattern: '^[A-Z]{2}$', min_rate: 1.0}\n",
+        df,
+    )
+    assert results[0].passed is False

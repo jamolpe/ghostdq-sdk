@@ -8,14 +8,21 @@ import pyarrow as pa
 import pyarrow.compute as pc
 
 from ghostdq.contract import RuleSpec, required_columns
+from ghostdq.metrics.checks import is_out_of_range, regex_matches
 from ghostdq.metrics.plans import ColumnMetricsPlan, build_metric_plan
 from ghostdq.reading.types import PathLike
 
 
 class ArrowMetricsEngine:
-    """Compute contract metrics directly from a PyArrow table."""
+    """Compute contract metrics directly from a PyArrow table (no pandas).
+
+    Uses vectorized ``pyarrow.compute`` kernels where possible. Typical entry
+    point for Parquet files via :meth:`compute_parquet`, which applies column
+    pruning at read time.
+    """
 
     def compute(self, table: pa.Table, rules: list[RuleSpec]) -> dict[str, Any]:
+        """Compute metrics from an in-memory Arrow table."""
         work = self._narrow_table(table, rules)
         need_row_count, plans = build_metric_plan(rules)
         total = work.num_rows
@@ -108,10 +115,58 @@ class ArrowMetricsEngine:
                 pc.sum(pc.or_(invalid, nulls).cast(pa.int64())).as_py()
             )
 
+        if plan.out_of_range_rate:
+            out[f"out_of_range_rate:{column}"] = self._out_of_range_rate(
+                array,
+                total,
+                min_val=plan.out_of_range_min,
+                max_val=plan.out_of_range_max,
+            )
+
+        if plan.regex_match_rate and plan.regex_pattern is not None:
+            out[f"regex_match_rate:{column}"] = self._regex_match_rate(
+                array,
+                total,
+                plan.regex_pattern,
+            )
+
         if length != total:
             raise RuntimeError("column length mismatch while computing metrics")
 
         return out
+
+    @staticmethod
+    def _out_of_range_rate(
+        array: pa.Array | pa.ChunkedArray,
+        total: int,
+        *,
+        min_val: float | None,
+        max_val: float | None,
+    ) -> float:
+        if total == 0:
+            return 0.0
+        bad = sum(
+            1
+            for value in array.to_pylist()
+            if is_out_of_range(value, min_val=min_val, max_val=max_val)
+        )
+        return round(bad / total, 8)
+
+    @staticmethod
+    def _regex_match_rate(
+        array: pa.Array | pa.ChunkedArray,
+        total: int,
+        pattern: str,
+    ) -> float:
+        import re
+
+        if total == 0:
+            return 0.0
+        compiled = re.compile(pattern)
+        matches = sum(
+            1 for value in array.to_pylist() if regex_matches(value, compiled)
+        )
+        return round(matches / total, 8)
 
     @staticmethod
     def _duplicate_count(array: pa.Array | pa.ChunkedArray) -> int:

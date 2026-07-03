@@ -60,4 +60,5 @@ htmlcov/
 
 PUBLISHING.md
 examples/
+internal_docs/
 .vscode/

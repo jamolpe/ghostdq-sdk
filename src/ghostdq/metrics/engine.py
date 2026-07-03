@@ -7,14 +7,26 @@ from typing import Any
 import pandas as pd
 
 from ghostdq.contract import RuleSpec, required_columns
+from ghostdq.metrics.checks import is_out_of_range, regex_matches
 from ghostdq.metrics.plans import ColumnMetricsPlan, build_metric_plan
 
 
 class MetricsEngine:
-    """Compute contract metrics from a pandas DataFrame."""
+    """Compute contract metrics from an in-memory pandas DataFrame.
+
+    This is the default backend when data is already loaded. It:
+
+    1. Narrows the DataFrame to :func:`~ghostdq.contract.required_columns`
+    2. Builds a :class:`~ghostdq.metrics.plans.ColumnMetricsPlan` per column
+    3. Returns a flat dict of metric keys → scalar values
+
+    The output dict is what :class:`~ghostdq.evaluation.RuleEvaluator` compares
+    against rule thresholds, and what :class:`~ghostdq.export.GhostDQClient`
+    submits to the API.
+    """
 
     def compute(self, df: pd.DataFrame, rules: list[RuleSpec]) -> dict[str, Any]:
-        """Compute all metric keys required by the given rules."""
+        """Compute all metric keys required by *rules* from *df*."""
         work = self._narrow_to_required_columns(df, rules)
         need_row_count, plans = build_metric_plan(rules)
         total = len(work)
@@ -84,6 +96,21 @@ class MetricsEngine:
                 (~series.astype(str).isin(allowed_set)).sum()
             )
 
+        if plan.out_of_range_rate:
+            out[f"out_of_range_rate:{column}"] = _out_of_range_rate(
+                series,
+                total,
+                min_val=plan.out_of_range_min,
+                max_val=plan.out_of_range_max,
+            )
+
+        if plan.regex_match_rate and plan.regex_pattern is not None:
+            out[f"regex_match_rate:{column}"] = _regex_match_rate(
+                series,
+                total,
+                plan.regex_pattern,
+            )
+
         return out
 
 
@@ -93,3 +120,29 @@ _default_engine = MetricsEngine()
 def compute_metrics(df: pd.DataFrame, rules: list[RuleSpec]) -> dict[str, Any]:
     """Compute metrics using the default :class:`MetricsEngine`."""
     return _default_engine.compute(df, rules)
+
+
+def _out_of_range_rate(
+    series: pd.Series,
+    total: int,
+    *,
+    min_val: float | None,
+    max_val: float | None,
+) -> float:
+    if total == 0:
+        return 0.0
+    bad = sum(
+        1 for value in series
+        if is_out_of_range(value, min_val=min_val, max_val=max_val)
+    )
+    return round(bad / total, 8)
+
+
+def _regex_match_rate(series: pd.Series, total: int, pattern: str) -> float:
+    import re
+
+    if total == 0:
+        return 0.0
+    compiled = re.compile(pattern)
+    matches = sum(1 for value in series if regex_matches(value, compiled))
+    return round(matches / total, 8)

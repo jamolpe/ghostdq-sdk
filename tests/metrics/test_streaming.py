@@ -52,3 +52,25 @@ def test_streaming_duplicate_counts(tmp_path: Path) -> None:
     )
     metrics = compute_csv_streaming(csv_path, contract.rules, chunksize=2)
     assert abs(metrics["duplicate_rate:id"] - 0.5) < 1e-6
+
+
+def test_streaming_out_of_range_and_regex(tmp_path: Path) -> None:
+    csv_path = tmp_path / "checks.csv"
+    csv_path.write_text("amount,code\n10,AB\n200,XY\n,bad\n")
+
+    contract = parse_contract(
+        textwrap.dedent(
+            """\
+            dataset: d
+            version: 1
+            rules:
+              - out_of_range_rate: {column: amount, min: 0, max: 100, max_rate: 0.5}
+              - regex_match: {column: code, pattern: '^[A-Z]{2}$', min_rate: 0.5}
+            """
+        )
+    )
+
+    df = pd.read_csv(csv_path)
+    expected = compute_metrics(df, contract.rules)
+    actual = compute_csv_streaming(csv_path, contract.rules, chunksize=1)
+    assert actual == expected
