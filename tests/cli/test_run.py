@@ -7,39 +7,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 from ghostdq.cli import main
-
-CONTRACT_YAML = textwrap.dedent(
-    """\
-    dataset: sales
-    version: 1
-    rules:
-      - row_count: {min: 1}
-    """
-)
-
-CSV_CONTENT = textwrap.dedent(
-    """\
-    id,country,amount
-    1,ES,100
-    2,US,200
-    """
-)
-
-
-@pytest.fixture()
-def contract_file(tmp_path: Path) -> Path:
-    p = tmp_path / "contract.yaml"
-    p.write_text(CONTRACT_YAML)
-    return p
-
-
-@pytest.fixture()
-def data_file(tmp_path: Path) -> Path:
-    p = tmp_path / "data.csv"
-    p.write_text(CSV_CONTENT)
-    return p
 
 
 def test_run_with_local_contract(contract_file: Path, data_file: Path) -> None:
@@ -49,7 +17,7 @@ def test_run_with_local_contract(contract_file: Path, data_file: Path) -> None:
     mock_result.run_id = run_id
     mock_result.status = "pending"
 
-    with patch("ghostdq.client.GhostDQClient") as MockClient:
+    with patch("ghostdq.export.GhostDQClient") as MockClient:
         instance = MockClient.return_value
         instance.create_run.return_value = mock_result
 
@@ -72,7 +40,7 @@ def test_run_with_local_contract(contract_file: Path, data_file: Path) -> None:
 
 
 def test_run_with_contract_only(contract_file: Path, data_file: Path) -> None:
-    with patch("ghostdq.client.GhostDQClient") as MockClient:
+    with patch("ghostdq.export.GhostDQClient") as MockClient:
         exit_code = main(
             [
                 "run",
@@ -129,13 +97,13 @@ def test_run_missing_api_key_for_remote(data_file: Path, contract_file: Path) ->
 
 
 def test_run_default_ingest_url(data_file: Path, contract_file: Path) -> None:
-    from ghostdq.client import DEFAULT_INGEST_URL
+    from ghostdq.export import DEFAULT_INGEST_URL
 
     mock_result = MagicMock()
     mock_result.run_id = str(uuid.uuid4())
     mock_result.status = "pending"
 
-    with patch("ghostdq.client.GhostDQClient") as MockClient:
+    with patch("ghostdq.export.GhostDQClient") as MockClient:
         instance = MockClient.return_value
         instance.create_run.return_value = mock_result
 
@@ -171,9 +139,9 @@ def test_run_file_not_found(tmp_path: Path, contract_file: Path) -> None:
 
 
 def test_run_api_error(data_file: Path, contract_file: Path) -> None:
-    from ghostdq.client import GhostDQAPIError
+    from ghostdq.export import GhostDQAPIError
 
-    with patch("ghostdq.client.GhostDQClient") as MockClient:
+    with patch("ghostdq.export.GhostDQClient") as MockClient:
         instance = MockClient.return_value
         instance.create_run.side_effect = GhostDQAPIError(401, "Unauthorized")
 

@@ -18,21 +18,59 @@ in `ghostdq_core.contract` for this reason.
 MODULE LAYOUT
 -------------
 src/ghostdq/
-  __init__.py     — public API surface, re-exports everything a user needs
-  contract.py     — Contract / RuleSpec dataclasses + parse_contract(yaml_text)
-  io_pandas.py    — read_file() dispatcher, read_csv/parquet/avro helpers
-  metrics.py      — compute_metrics(df, rules) → dict[str, Any]
-  client.py       — GhostDQClient: POST /v1/runs, GET /v1/datasets/{id}/contract
-  cli.py          — `ghostdq run ...` CLI entry point (stdlib argparse + urllib)
-  py.typed        — mypy marker
+  __init__.py         — public API surface, re-exports everything a user needs
+  py.typed            — mypy marker
+  client.py           — backward-compat shim → ghostdq.export
+  evaluate.py         — backward-compat shim → ghostdq.evaluation
+  io_pandas.py        — backward-compat shim → ghostdq.reading
+
+  contract/
+    models.py         — Contract, RuleSpec, SchemaField
+    parser.py         — ContractParser, parse_contract, required_columns
+
+  reading/
+    pandas.py         — PandasFileReader, read_file/read_csv/read_parquet/read_avro
+    types.py          — PathLike
+
+  metrics/
+    engine.py         — MetricsEngine (pandas DataFrame)
+    arrow.py          — ArrowMetricsEngine (PyArrow table / Parquet)
+    streaming.py      — StreamingCsvMetricsEngine (chunked CSV)
+    polars_engine.py  — PolarsMetricsEngine (optional: pip install ghostdq[polars])
+    duckdb_engine.py  — DuckDBMetricsEngine (optional: pip install ghostdq[duckdb])
+    router.py         — compute_metrics_file() backend auto-selection
+    plans.py          — ColumnMetricsPlan, build_metric_plan
+    accumulators.py   — streaming chunk state
+
+  evaluation/
+    evaluator.py      — RuleEvaluator, evaluate_rules, format_evaluation_line
+    models.py         — RuleEvaluation
+
+  export/
+    client.py         — GhostDQClient, RunResult
+    constants.py      — DEFAULT_INGEST_URL
+    exceptions.py     — GhostDQAPIError
+
+  cli/
+    run.py            — `ghostdq run ...` implementation
+    __init__.py       — main() entry point
 
 tests/
-  conftest.py         — shared fixtures (simple_df, contract_yaml_minimal/full)
-  test_contract.py    — parse_contract + metric_keys derivation
-  test_metrics.py     — compute_metrics for all 5 rule types
-  test_io_pandas.py   — read_file for CSV + Parquet (Avro needs fastavro)
-  test_client.py      — GhostDQClient with mocked urlopen (no network)
-  test_cli.py         — `ghostdq run` with mocked GhostDQClient
+  conftest.py              — shared fixtures (simple_df, contract_yaml_minimal/full)
+  contract/
+    test_parser.py         — parse_contract + metric_keys derivation
+  reading/
+    conftest.py            — tmp_csv, tmp_parquet
+    test_pandas.py         — read_file for CSV + Parquet + Avro
+  metrics/
+    test_engine.py         — compute_metrics for all rule types
+  evaluation/
+    test_evaluator.py      — evaluate_rules + formatting
+  export/
+    test_client.py         — GhostDQClient with mocked urlopen (no network)
+  cli/
+    conftest.py            — contract_file, data_file
+    test_run.py            — `ghostdq run` with mocked GhostDQClient
 
 METRIC KEY CONTRACT (must match ghostdq_core.rules)
 ----------------------------------------------------
@@ -59,9 +97,9 @@ TESTING
   cd <repo-root>
   pytest packages/sdk/tests -v
 
-All 32 tests are pure unit tests — no network, no DB, no filesystem side effects
-beyond pytest's tmp_path. The CLI patch target is `ghostdq.client.GhostDQClient`
-(not `ghostdq.cli.GhostDQClient`) because the CLI uses lazy imports.
+All 54 tests are pure unit tests — no network, no DB, no filesystem side effects
+beyond pytest's tmp_path. Patch targets: `ghostdq.export.GhostDQClient` for CLI,
+`ghostdq.export.client.urlopen` for client unit tests.
 
 VERSIONS
 --------

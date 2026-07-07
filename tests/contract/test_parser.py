@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from ghostdq.contract import Contract, RuleSpec, parse_contract
+from ghostdq.contract import Contract, RuleSpec, parse_contract, required_columns
 
 
 def test_parse_minimal(contract_yaml_minimal: str) -> None:
@@ -31,6 +31,25 @@ def test_all_metric_keys(contract_yaml_full: str) -> None:
     assert "value_min:amount" in keys
     assert "value_max:amount" in keys
     assert "disallowed_count:country" in keys
+
+
+def test_required_columns(contract_yaml_full: str) -> None:
+    c = parse_contract(contract_yaml_full)
+    assert c.required_columns() == ["country", "id", "amount"]
+
+
+def test_required_columns_row_count_only(contract_yaml_minimal: str) -> None:
+    c = parse_contract(contract_yaml_minimal)
+    assert c.required_columns() == []
+
+
+def test_required_columns_deduplicates() -> None:
+    rules = [
+        RuleSpec(rule_type="null_rate", params={"column": "country", "max": 0.1}),
+        RuleSpec(rule_type="allowed_values", params={"column": "country", "values": ["ES"]}),
+        RuleSpec(rule_type="unique", params={"column": "id"}),
+    ]
+    assert required_columns(rules) == ["country", "id"]
 
 
 def test_rule_spec_metric_keys() -> None:

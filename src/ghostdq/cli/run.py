@@ -1,20 +1,4 @@
-"""Command-line interface for GhostDQ.
-
-Usage
------
-Local validation (no API key, nothing sent to the server):
-
-    ghostdq run --contract contract.yaml --file data.csv
-
-Remote run (fetch contract and/or submit metrics to the Ingest API):
-
-    ghostdq run --dataset-id <uuid> --file data.csv --api-key ghd_xxx
-
-Environment variables (override with flags):
-  GHOSTDQ_API_KEY     — API key (only required for remote runs)
-  GHOSTDQ_DATASET_ID  — dataset UUID (enables remote submit)
-  GHOSTDQ_INGEST_URL  — Ingest API base URL (default: https://ghostdq.com/ingest)
-"""
+"""``ghostdq run`` command implementation."""
 
 from __future__ import annotations
 
@@ -59,27 +43,27 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Ingest API base URL (default: $GHOSTDQ_INGEST_URL or https://ghostdq.com/ingest)",
     )
+    run_cmd.add_argument(
+        "--engine",
+        default="auto",
+        choices=["auto", "pandas", "arrow", "streaming", "polars", "duckdb"],
+        help="Metrics backend (default: auto — streaming for CSV, arrow for Parquet)",
+    )
+    run_cmd.add_argument(
+        "--chunk-size",
+        type=int,
+        default=100_000,
+        help="CSV chunk size when using the streaming engine (default: 100000)",
+    )
 
     return p
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Entry point; returns an exit code."""
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
-    if args.command == "run":
-        return _cmd_run(args)
-
-    parser.print_help()
-    return 1
-
-
-def _cmd_run(args: argparse.Namespace) -> int:
-    from ghostdq.contract import parse_contract
-    from ghostdq.evaluate import evaluate_rules, format_evaluation_line
-    from ghostdq.io_pandas import read_file
-    from ghostdq.metrics import compute_metrics
+def cmd_run(args: argparse.Namespace) -> int:
+    from ghostdq.contract import ContractParser
+    from ghostdq.evaluation import RuleEvaluator
+    from ghostdq.export import DEFAULT_INGEST_URL, GhostDQAPIError, GhostDQClient
+    from ghostdq.metrics import compute_metrics_file
 
     dataset_id = args.dataset_id or os.environ.get("GHOSTDQ_DATASET_ID")
     remote = bool(dataset_id)
@@ -100,12 +84,13 @@ def _cmd_run(args: argparse.Namespace) -> int:
         )
         return 1
 
+    parser = ContractParser()
+    evaluator = RuleEvaluator()
+
     # 1. Load contract.
     if args.contract:
-        contract_yaml = Path(args.contract).read_text()
+        contract_yaml = Path(args.contract).read_text(encoding="utf-8")
     else:
-        from ghostdq.client import DEFAULT_INGEST_URL, GhostDQAPIError, GhostDQClient
-
         ingest_url = (
             args.ingest_url
             or os.environ.get("GHOSTDQ_INGEST_URL")
@@ -119,28 +104,28 @@ def _cmd_run(args: argparse.Namespace) -> int:
             return 1
 
     try:
-        contract = parse_contract(contract_yaml)
+        contract = parser.parse(contract_yaml)
     except ValueError as exc:
         print(f"Error parsing contract: {exc}", file=sys.stderr)
         return 1
 
-    # 2. Read file.
+    # 2. Compute metrics from file (backend selected via --engine).
     try:
-        df = read_file(args.file)
+        cols = contract.required_columns()
+        metrics = compute_metrics_file(
+            args.file,
+            contract.rules,
+            engine=args.engine,  # type: ignore[arg-type]
+            chunksize=args.chunk_size,
+            columns=cols or None,
+        )
+        results = evaluator.evaluate(contract.rules, metrics)
     except (FileNotFoundError, ValueError) as exc:
         print(f"Error reading file: {exc}", file=sys.stderr)
         return 1
 
-    # 3. Compute and evaluate metrics locally.
-    try:
-        metrics = compute_metrics(df, contract.rules)
-        results = evaluate_rules(contract.rules, metrics)
-    except ValueError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
-
     for result in results:
-        print(format_evaluation_line(result))
+        print(evaluator.format_line(result))
 
     all_passed = all(r.passed for r in results)
 
@@ -148,8 +133,6 @@ def _cmd_run(args: argparse.Namespace) -> int:
         return 0 if all_passed else 1
 
     # 4. POST to Ingest API (remote run only).
-    from ghostdq.client import DEFAULT_INGEST_URL, GhostDQAPIError, GhostDQClient
-
     ingest_url = (
         args.ingest_url
         or os.environ.get("GHOSTDQ_INGEST_URL")
@@ -157,7 +140,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
     )
     client = GhostDQClient(api_key=api_key, ingest_url=ingest_url)
     try:
-        result = client.create_run(
+        run_result = client.create_run(
             dataset_id=dataset_id,
             metrics=metrics,
             source="sdk",
@@ -166,9 +149,17 @@ def _cmd_run(args: argparse.Namespace) -> int:
         print(f"Error submitting run: {exc}", file=sys.stderr)
         return 1
 
-    print(f"run_id={result.run_id}  status={result.status}")
+    print(f"run_id={run_result.run_id}  status={run_result.status}")
     return 0 if all_passed else 1
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def main(argv: list[str] | None = None) -> int:
+    """Entry point; returns an exit code."""
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    if args.command == "run":
+        return cmd_run(args)
+
+    parser.print_help()
+    return 1

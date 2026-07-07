@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import textwrap
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -57,3 +58,25 @@ def contract_yaml_full() -> str:
           - allowed_values: {column: country, values: [ES, US, MX]}
         """
     )
+
+
+@pytest.fixture()
+def tmp_csv(tmp_path: Path) -> Path:
+    p = tmp_path / "data.csv"
+    p.write_text(
+        textwrap.dedent(
+            """\
+            id,value
+            1,100
+            2,200
+            """
+        )
+    )
+    return p
+
+
+@pytest.fixture()
+def tmp_parquet(tmp_path: Path, simple_df: pd.DataFrame) -> Path:
+    p = tmp_path / "data.parquet"
+    simple_df.to_parquet(p, index=False, engine="pyarrow")
+    return p
