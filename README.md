@@ -21,6 +21,7 @@ Optional extras:
 pip install "ghostdq[polars]"   # Polars lazy-scan backend
 pip install "ghostdq[duckdb]"   # DuckDB SQL backend
 pip install "ghostdq[fast]"     # both Polars and DuckDB
+pip install "ghostdq[otel]"     # OpenTelemetry metrics export
 pip install "ghostdq[dev]"      # pytest, ruff, mypy, stubs
 ```
 
@@ -317,6 +318,7 @@ ghostdq run --contract contract.yaml --file data.parquet --engine arrow
 | `--ingest-url` | Ingest API base URL (`GHOSTDQ_INGEST_URL`, default `https://ghostdq.com/ingest`) |
 | `--engine` | `auto`, `pandas`, `arrow`, `streaming`, `polars`, `duckdb` |
 | `--chunk-size` | CSV chunk size for streaming engine (default `100000`) |
+| `--export-otel` | Export metrics to OpenTelemetry (`GHOSTDQ_OTEL_ENABLED=1`) |
 
 Environment shortcuts:
 
@@ -344,6 +346,91 @@ result = client.create_run(dataset="sales", metrics=metrics)
 # Fetch contract from the API
 yaml_text = client.get_contract_yaml("<uuid>")
 ```
+
+---
+
+## OpenTelemetry integration
+
+GhostDQ can emit computed metrics and rule evaluations to your existing observability stack (OTel Collector, Grafana, Datadog, Honeycomb, etc.) alongside application metrics. This is **additive** — it does not replace the GhostDQ Ingest API.
+
+```bash
+pip install "ghostdq[otel]"
+```
+
+### Programmatic export
+
+```python
+from ghostdq import compute_metrics_file, evaluate_rules, parse_contract
+from ghostdq.export.otel import configure_meter_from_env, export_run
+
+contract = parse_contract(open("contract.yaml").read())
+metrics = compute_metrics_file("data.csv", contract.rules)
+results = evaluate_rules(contract.rules, metrics)
+
+meter = configure_meter_from_env()  # reads OTEL_* env vars
+export_run(
+    metrics,
+    results,
+    meter=meter,
+    attributes={
+        "dataset": contract.dataset,
+        "dataset_id": "<uuid>",
+        "ghostdq.source": "sdk",
+    },
+)
+```
+
+Lower-level helpers:
+
+```python
+from ghostdq.export.otel import export_metrics, export_evaluations
+
+export_metrics(metrics, attributes={"dataset": "sales"})
+export_evaluations(results, attributes={"dataset": "sales"})
+```
+
+### Metric mapping
+
+| GhostDQ key | OTel instrument | Attributes |
+|-------------|-----------------|------------|
+| `row_count` | Gauge | `dataset`, `dataset_id`, … |
+| `null_rate:{col}` | Gauge | `column` |
+| `duplicate_count:{col}` | Counter | `column` |
+| `duplicate_rate:{col}` | Gauge | `column` |
+| `value_min:{col}` / `value_max:{col}` | Gauge | `column` |
+| `disallowed_count:{col}` | Counter | `column` |
+| `out_of_range_rate:{col}` | Gauge | `column` |
+| `regex_match_rate:{col}` | Gauge | `column` |
+
+Rule evaluations emit `ghostdq.rule.passed` (1 or 0) with `rule_type` and optional `column` attributes.
+
+Metric names use the prefix `ghostdq.` by default (configurable via `GHOSTDQ_OTEL_METRIC_PREFIX`).
+
+### CLI
+
+```bash
+# Enable OTel export for a local or remote run
+ghostdq run --contract contract.yaml --file data.csv --export-otel
+
+# Or via environment
+export GHOSTDQ_OTEL_ENABLED=1
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export OTEL_SERVICE_NAME=ghostdq-ci
+ghostdq run --contract contract.yaml --file data.csv
+```
+
+Standard OpenTelemetry environment variables are respected (`OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`). Short-lived CI jobs rely on an explicit flush after each run.
+
+### Local collector (podman)
+
+```bash
+podman run --rm -p 4318:4318 otel/opentelemetry-collector:latest
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+export GHOSTDQ_OTEL_ENABLED=1
+ghostdq run --contract contract.yaml --file data.csv
+```
+
+**Cardinality note:** high-cardinality column names (e.g. user IDs used as column keys) can explode metric cardinality in your backend — same caution as with any labeled metrics.
 
 ---
 
