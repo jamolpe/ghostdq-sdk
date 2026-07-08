@@ -55,6 +55,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default=100_000,
         help="CSV chunk size when using the streaming engine (default: 100000)",
     )
+    run_cmd.add_argument(
+        "--export-otel",
+        action="store_true",
+        default=None,
+        help="Export metrics to OpenTelemetry (also: GHOSTDQ_OTEL_ENABLED=1)",
+    )
 
     return p
 
@@ -128,6 +134,27 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(evaluator.format_line(result))
 
     all_passed = all(r.passed for r in results)
+
+    export_otel = args.export_otel
+    if export_otel is None:
+        export_otel = os.environ.get("GHOSTDQ_OTEL_ENABLED", "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
+    if export_otel:
+        from ghostdq.export.otel import configure_meter_from_env, export_run
+
+        otel_attrs: dict[str, str] = {"ghostdq.source": "cli"}
+        if dataset_id:
+            otel_attrs["dataset_id"] = str(dataset_id)
+        if contract.dataset:
+            otel_attrs["dataset"] = contract.dataset
+
+        meter = configure_meter_from_env()
+        export_run(metrics, results, meter=meter, attributes=otel_attrs)
 
     if not remote:
         return 0 if all_passed else 1
