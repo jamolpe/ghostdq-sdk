@@ -1,4 +1,4 @@
-"""Backward-compatible re-exports for the pandas metrics engine."""
+"""Pandas in-memory metrics engine."""
 
 from ghostdq.metrics.engines.pandas.engine import MetricsEngine, compute_metrics
 

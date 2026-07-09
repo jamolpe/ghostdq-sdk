@@ -33,14 +33,19 @@ src/ghostdq/
     types.py          — PathLike
 
   metrics/
-    engine.py         — MetricsEngine (pandas DataFrame)
-    arrow.py          — ArrowMetricsEngine (PyArrow table / Parquet)
-    streaming.py      — StreamingCsvMetricsEngine (chunked CSV)
-    polars_engine.py  — PolarsMetricsEngine (optional: pip install ghostdq[polars])
-    duckdb_engine.py  — DuckDBMetricsEngine (optional: pip install ghostdq[duckdb])
     router.py         — compute_metrics_file() backend auto-selection
     plans.py          — ColumnMetricsPlan, build_metric_plan
-    accumulators.py   — streaming chunk state
+    checks.py         — shared row-level metric semantics
+    engines/
+      pandas/engine.py    — MetricsEngine (pandas DataFrame)
+      arrow/engine.py     — ArrowMetricsEngine (PyArrow table / Parquet)
+      streaming/
+        engine.py         — StreamingCsvMetricsEngine (chunked CSV)
+        accumulators.py   — streaming chunk state
+      polars/engine.py    — PolarsMetricsEngine (optional: pip install ghostdq[polars])
+      duckdb/engine.py    — DuckDBMetricsEngine (optional: pip install ghostdq[duckdb])
+    engine.py, arrow.py, streaming.py, polars_engine.py, duckdb_engine.py, accumulators.py
+                        — backward-compatible re-exports
 
   evaluation/
     evaluator.py      — RuleEvaluator, evaluate_rules, format_evaluation_line

@@ -1,4 +1,4 @@
-"""Backward-compatible re-exports for the DuckDB metrics engine."""
+"""DuckDB metrics engine (optional dependency)."""
 
 from ghostdq.metrics.engines.duckdb.engine import DuckDBMetricsEngine
 

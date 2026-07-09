@@ -1,4 +1,4 @@
-"""Backward-compatible re-exports for the streaming CSV metrics engine."""
+"""Chunked CSV streaming metrics engine."""
 
 from ghostdq.metrics.engines.streaming.engine import (
     StreamingCsvMetricsEngine,

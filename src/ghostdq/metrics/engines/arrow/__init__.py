@@ -1,4 +1,4 @@
-"""Backward-compatible re-exports for the PyArrow metrics engine."""
+"""PyArrow metrics engine."""
 
 from ghostdq.metrics.engines.arrow.engine import ArrowMetricsEngine, compute_arrow_metrics
 

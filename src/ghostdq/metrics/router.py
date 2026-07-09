@@ -6,9 +6,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 from ghostdq.contract import RuleSpec, required_columns
-from ghostdq.metrics.arrow import ArrowMetricsEngine
-from ghostdq.metrics.engine import MetricsEngine
-from ghostdq.metrics.streaming import StreamingCsvMetricsEngine
+from ghostdq.metrics.engines.arrow.engine import ArrowMetricsEngine
+from ghostdq.metrics.engines.pandas.engine import MetricsEngine
+from ghostdq.metrics.engines.streaming.engine import StreamingCsvMetricsEngine
 from ghostdq.reading import PandasFileReader
 from ghostdq.reading.types import PathLike
 
@@ -45,7 +45,7 @@ def compute_metrics_file(
         return ArrowMetricsEngine().compute_parquet(p, rules)
 
     if chosen == "polars":
-        from ghostdq.metrics.polars_engine import PolarsMetricsEngine
+        from ghostdq.metrics.engines.polars.engine import PolarsMetricsEngine
 
         reader = PolarsMetricsEngine()
         if suffix == ".csv":
@@ -55,7 +55,7 @@ def compute_metrics_file(
         raise ValueError(f"Polars engine does not support {suffix!r}")
 
     if chosen == "duckdb":
-        from ghostdq.metrics.duckdb_engine import DuckDBMetricsEngine
+        from ghostdq.metrics.engines.duckdb.engine import DuckDBMetricsEngine
 
         duckdb = __import__("duckdb")
         conn = duckdb_connection or duckdb.connect()

@@ -1,4 +1,4 @@
-"""Backward-compatible re-exports for the Polars metrics engine."""
+"""Polars metrics engine (optional dependency)."""
 
 from ghostdq.metrics.engines.polars.engine import PolarsMetricsEngine
 
