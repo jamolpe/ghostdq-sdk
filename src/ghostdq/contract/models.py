@@ -125,4 +125,4 @@ class Contract:
         """Column names referenced by rules, in first-seen order."""
         from ghostdq.contract.parser import required_columns
 
-        return required_columns(self.rules)
+        return required_columns(self.rules, schema_fields=self.schema_fields)

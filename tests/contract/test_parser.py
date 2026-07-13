@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from ghostdq.contract import Contract, RuleSpec, parse_contract, required_columns
+from ghostdq.contract import Contract, RuleSpec, SchemaField, parse_contract, required_columns
 
 
 def test_parse_minimal(contract_yaml_minimal: str) -> None:
@@ -50,6 +50,64 @@ def test_required_columns_deduplicates() -> None:
         RuleSpec(rule_type="unique", params={"column": "id"}),
     ]
     assert required_columns(rules) == ["country", "id"]
+
+
+def test_required_columns_reads_columns_list() -> None:
+    rules = [
+        RuleSpec(
+            rule_type="compound_unique",
+            params={"columns": ["store_id", "transaction_date", "receipt_no"]},
+        ),
+        RuleSpec(rule_type="null_rate", params={"column": "store_id", "max": 0.1}),
+    ]
+    assert required_columns(rules) == ["store_id", "transaction_date", "receipt_no"]
+
+
+def test_required_columns_reads_left_and_right() -> None:
+    rules = [
+        RuleSpec(
+            rule_type="column_pair",
+            params={"left": "end_date", "right": "start_date", "op": "gt"},
+        ),
+    ]
+    assert required_columns(rules) == ["end_date", "start_date"]
+
+
+def test_required_columns_table_schema_rules_use_schema_fields() -> None:
+    rules = [
+        RuleSpec(rule_type="columns_match", params={"exact": True}),
+        RuleSpec(rule_type="null_rate", params={"column": "email", "max": 0.01}),
+    ]
+    schema = [
+        SchemaField(name="order_id", type="string"),
+        SchemaField(name="amount", type="float"),
+    ]
+    assert required_columns(rules, schema_fields=schema) == [
+        "order_id",
+        "amount",
+        "email",
+    ]
+
+
+def test_required_columns_table_schema_rules_without_schema_fields() -> None:
+    rules = [RuleSpec(rule_type="columns_match", params={"exact": True})]
+    assert required_columns(rules) == []
+
+
+def test_contract_required_columns_includes_schema_for_table_rules() -> None:
+    c = Contract(
+        dataset="orders",
+        version=1,
+        schema_fields=[
+            SchemaField(name="order_id", type="string"),
+            SchemaField(name="amount", type="float"),
+        ],
+        rules=[
+            RuleSpec(rule_type="columns_match", params={"exact": True}),
+            RuleSpec(rule_type="row_count", params={"min": 1}),
+        ],
+    )
+    assert c.required_columns() == ["order_id", "amount"]
 
 
 def test_rule_spec_metric_keys() -> None:

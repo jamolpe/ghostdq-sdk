@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import yaml
 
+from typing import Any
+
 from ghostdq.contract.models import Contract, RuleSpec, SchemaField, SUPPORTED_RULES
+
+# Table-level rules that need every declared schema column (no per-rule `column` param).
+_TABLE_SCHEMA_RULES = frozenset({"columns_match", "column_types"})
 
 
 class ContractParser:
@@ -64,16 +69,55 @@ def parse_contract(yaml_text: str) -> Contract:
     return ContractParser().parse(yaml_text)
 
 
-def required_columns(rules: list[RuleSpec]) -> list[str]:
+def _columns_from_rule_params(params: dict[str, Any]) -> list[str]:
+    """Extract column names referenced directly in rule params."""
+    cols: list[str] = []
+
+    col = params.get("column")
+    if isinstance(col, str) and col:
+        cols.append(col)
+
+    for key in ("left", "right"):
+        val = params.get(key)
+        if isinstance(val, str) and val:
+            cols.append(val)
+
+    multi = params.get("columns")
+    if isinstance(multi, list):
+        for item in multi:
+            if isinstance(item, str) and item:
+                cols.append(item)
+
+    return cols
+
+
+def required_columns(
+    rules: list[RuleSpec],
+    *,
+    schema_fields: list[SchemaField] | None = None,
+) -> list[str]:
     """Return column names needed to compute metrics for the given rules.
 
-    ``row_count`` does not reference a column. Duplicate names are omitted.
+    Reads ``column``, ``columns``, ``left``, and ``right`` from rule params.
+    Table-level schema rules (:data:`_TABLE_SCHEMA_RULES`) union every name from
+    ``schema_fields`` when provided.
+
+    ``row_count`` does not reference a column. Duplicate names are omitted while
+    preserving first-seen order.
     """
     seen: set[str] = set()
     cols: list[str] = []
+
+    def add(name: str) -> None:
+        if name and name not in seen:
+            seen.add(name)
+            cols.append(name)
+
     for rule in rules:
-        col = rule.params.get("column")
-        if isinstance(col, str) and col and col not in seen:
-            seen.add(col)
-            cols.append(col)
+        for col in _columns_from_rule_params(rule.params):
+            add(col)
+        if rule.rule_type in _TABLE_SCHEMA_RULES and schema_fields:
+            for field in schema_fields:
+                add(field.name)
+
     return cols
